@@ -1,7 +1,7 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr,Field
 from beanie import PydanticObjectId
-from typing import List
+from typing import List,Optional
 
 
 class UserBase(BaseModel):
@@ -16,14 +16,21 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = Field(None)
     password: Optional[str] = Field(None, min_length=6)
 
+    
+class BatchDeleteRequest(BaseModel):
+    user_ids: List[str]
+    reason: Optional[str] = None
+
 class UserOut(UserBase):
     id:PydanticObjectId
     created_at: datetime
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserListResponse(BaseModel):
     users: List[UserOut]
 
+
+    
