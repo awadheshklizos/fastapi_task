@@ -11,16 +11,16 @@ from app.core.security import (authenticate_user, create_access_token,create_ref
 )
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.core.config import settings
-from app.schemas.user_schema import UserOut,UserCreate,UserListResponse,UserUpdate,BatchDeleteRequest
+from app.schemas.user_schema import UserOut,UserCreate,UserListResponse,UserUpdate,BatchDeleteRequest,TrashRecordResponse,TrashList,RestoreUser
 from app.core.database import init_db
 from fastapi.responses import JSONResponse
-from typing import Optional
-from typing import List
-
+from typing import Optional,List 
+from beanie import Document
+from pydantic import Field
+from datetime import datetime
+from bson import ObjectId 
 
 router = APIRouter(tags=["auth"])
-
-
 
 
 @router.post("/login", response_model=Token)
@@ -44,7 +44,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     )
 
     # Store the refresh token in the user's document
-    user.refresh_tokens.append(refresh_token)
+
+    # user.refresh_tokens.append(refresh_token)
     await user.save()
 
     return {"access_token": access_token,"refresh_token":refresh_token,  "token_type": "bearer"}
@@ -64,6 +65,7 @@ async def signup(user_data: UserCreate):
         username=user_data.username,
         email=user_data.email,
         hashed_password=hashed_password,
+    
     )
     await user.insert()
     return user
@@ -154,7 +156,6 @@ async def soft_delete_user_by_id(
     reason: Optional[str] = None,
     current_user: User = Depends(get_current_user)
 ):
-
     if user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -163,11 +164,20 @@ async def soft_delete_user_by_id(
     # Find the user to be soft-deleted
     user = await User.find_one(User.id == user_id)
 
-    if not user:
+    user_delete_status_check = await User.find_one({"_id": user_id, "delete_status": True})
+    user_check_in_trash= await Trash.find_one({"original_data.id": ObjectId(user_id)})
+
+    if user_check_in_trash:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=500,
+            detail="User Already Present in Trash",
         )
+    elif not user_check_in_trash and user_delete_status_check:
+        raise HTTPException(
+            status_code=400,
+            detail="User Already Permamently Deleted.."
+        )   
+
     dict_user=user.dict()
     dict_user['id']=current_user.id
 # Move the user's record to the Trash collection
@@ -179,22 +189,21 @@ async def soft_delete_user_by_id(
     )
 
     await trash_record.insert()
-    await user.delete()
+    await user.update({"$set":{"delete_status":True}})
     return user
 
 
-@router.delete('/users/multiple-delete', response_model=List[UserOut])
+
+
+@router.delete('/batch-delete')
 async def batch_soft_delete_users(
     batch_delete_request: BatchDeleteRequest,
-    current_user: User = Depends(get_current_user)
-    ):
-    
-    print("Batch delete triggered!") 
-    
+    current_user: User = Depends(get_current_user),
+):
     valid_user_ids = []
-    for uid in batch_delete_request.user_ids:
+    for uid_str in batch_delete_request.user_ids:
         try:
-            valid_user_ids.append(PydanticObjectId(uid))
+            valid_user_ids.append(PydanticObjectId(uid_str))
         except Exception:
             continue
 
@@ -203,29 +212,153 @@ async def batch_soft_delete_users(
             status_code=400,
             detail="No valid user IDs provided"
         )
-
-    users = await User.find(In(User.id, valid_user_ids)).to_list()
-    if not users:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No users found for deletion",
-        )
-
-    deleted_users = []
-    for user in users:
-        
+    already_deleted_user=list()    
+    deleted_users_data = []
+    users_not_found = []
+    for user_id in valid_user_ids:
+        user = await User.find_one(User.id == user_id) 
+        if not user:
+            users_not_found.append(str(user_id))
+            continue
         user_data = user.dict()
-        user_data["id"] = user.id 
+        user_delete_status_check = await User.find_one({"_id": user_id, "delete_status": True})
+        user_check_in_trash= await Trash.find_one({"original_data.id": ObjectId(user_id)})
 
+        if user_check_in_trash:
+            already_deleted_user.append(str(user_id))
+            print(already_deleted_user)
+            continue
+            # raise HTTPException(
+            #     status_code=500,
+            #     detail="User Already Present in Trash",
+            # )
+        elif not user_check_in_trash and user_delete_status_check:
+            already_deleted_user.append(str(user_id))
+            continue
+            # raise HTTPException(
+            #     status_code=400,
+            #     detail="User Already Permamently Deleted.."
+            # )   
+        # Create trash record
         trash_record = Trash(
-            original_data=user_data, 
-            deleted_by=current_user.id,  # Required field
-            # reason=batch_delete_request.reason, 
-        )
+            original_data=user_data,
+            deleted_by=current_user.id,
+            deletion_timestamp=datetime.now(),
+            reason=batch_delete_request.reason,
+            delete_status=True  )
         await trash_record.insert()
-        await user.delete()
+        await user.update({"$set":{"delete_status":True}})
+        deleted_users_data.append(user_data)
+    response = {
+        "deleted_users": deleted_users_data,
+        "already_deleted_user":already_deleted_user,
+        "message": f"Successfully deleted {len(deleted_users_data)} users"
+    }
+    if users_not_found:
+        response["warning"] = f"Users not found: {', '.join(users_not_found)}"
 
-        deleted_users.append(user)
+    if not deleted_users_data:
+        raise HTTPException(
+            status_code=404,
+            detail="No users were deleted"
+        )
+    return response
+    
+#for converting the objectid to srting
+def convert_objectid_to_str(obj):
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    return obj
 
-    return deleted_users
 
+@router.get('/view-trash', response_model=TrashList)
+async def view_trash(
+    current_user: User = Depends(get_current_user),): 
+    trash_records = await Trash.find().to_list()
+
+    if not trash_records:
+        raise HTTPException(
+            status_code=404,
+            detail="No soft-deleted user records found"
+        )
+
+    formatted_records = []
+    for record in trash_records:
+
+        original_data = {k: convert_objectid_to_str(v) for k, v in record.original_data.items()}
+        deleted_by = convert_objectid_to_str(record.deleted_by)
+        deletion_timestamp = record.deletion_timestamp.strftime('%Y-%m-%d %H:%M:%S')  
+
+        formatted_record = TrashRecordResponse(
+            id=str(record.id), 
+            original_data=original_data,
+            deletion_timestamp=deletion_timestamp,
+            deleted_by=deleted_by,
+            reason=record.reason,
+            delete_status=True,  
+        )
+        formatted_records.append(formatted_record)
+    return TrashList(trash=formatted_records)
+
+
+
+@router.put('/restore-user')
+async def restore_user_data(
+    restore_data: RestoreUser,
+    current_user: User = Depends(get_current_user)
+):
+    trash_record = await Trash.find_one({"original_data.id": ObjectId(restore_data.user_id)})
+    if not trash_record:
+        raise HTTPException(
+            status_code=404,
+            detail="No soft-deleted user record found"
+        )
+    try:
+        original_data = trash_record.original_data
+        res= str(original_data.get('id'))
+
+        update_result = await User.find_one({"_id": original_data.get('id')}).update(
+            {"$set": {"delete_status": False}}
+        )
+    
+        await Trash.find({"_id": trash_record.id}).delete()
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error restoring user: {str(e)}"
+        )
+
+    return {
+        "status": "success",
+        "message": "User restored successfully",
+        "restored_user_id": res
+    }
+
+
+
+@router.delete('/permamently-delete/{user_id}')
+async def permamently_delete_user_by_id(
+    user_id:str,
+    current_user:User=Depends(get_current_user)
+):
+    trash_record = await Trash.find_one({"original_data.id": ObjectId(user_id)})
+    if not trash_record:
+        raise HTTPException(
+            status_code=404,
+            detail="No User found for Permamently Deletion"
+        )
+    try:
+        original_data=trash_record.original_data
+        response=str(original_data.get('id'))
+
+        await Trash.find({"_id":trash_record.id}).delete()
+    except:
+        raise HTTPException(
+            status_code=500,
+            detail="Error during Deletion of Data"
+        )    
+    return {
+        "message":"User Permamently Deleted Successfully",
+        'delete_user_id':response
+    }    

@@ -1,7 +1,7 @@
 from beanie import Document
 from datetime import datetime
-from pydantic import Field
-from typing import Optional
+from pydantic import Field,BaseModel
+from typing import List,Optional
 from beanie import PydanticObjectId
 
 class Trash(Document):
@@ -13,11 +13,3 @@ class Trash(Document):
     class Settings:
         name = "trash"
 
-# class Trash(Document):
-#     original_data: dict
-#     deletion_timestamp: datetime = Field(default_factory=datetime.utcnow)
-#     deleted_by: str
-#     reason: Optional[str] = None
-
-#     class Settings:
-#         name = "trash"
