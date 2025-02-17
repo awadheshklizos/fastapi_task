@@ -1,7 +1,7 @@
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.core.database import init_db
+from app.core.database import init_db,close_db
 from app.routers import auth
 
 @asynccontextmanager
@@ -10,7 +10,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
     print("Application is shutting donw...")
+    await close_db()
 
+    
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth.router, prefix="/auth")
 

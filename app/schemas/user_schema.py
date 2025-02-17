@@ -11,8 +11,8 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
- 
-    
+
+
 class UserUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=3)
     email: Optional[EmailStr] = Field(None)
@@ -24,8 +24,9 @@ class UserUpdate(BaseModel):
 class UserOut(UserBase):
     id:PydanticObjectId
     created_at: datetime
-    updated_at: datetime
-    
+    # updated_at: datetime
+    role : str
+
     class Config:
         from_attributes = True
 

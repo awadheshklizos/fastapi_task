@@ -43,7 +43,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         data={"sub": user.username}, expires_delta=refresh_token_expires
     )
 
-    # Store the refresh token in the user's document
+
 
     # user.refresh_tokens.append(refresh_token)
     await user.save()
@@ -52,7 +52,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 
 
-@router.post("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post("/signup/user", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def signup(user_data: UserCreate):
     existing_user = await User.find_one({"$or": [{"username": user_data.username}, {"email": user_data.email}]})
     if existing_user:
@@ -65,10 +65,31 @@ async def signup(user_data: UserCreate):
         username=user_data.username,
         email=user_data.email,
         hashed_password=hashed_password,
+        role='user'
+    )
+
+    await user.insert()
+    return user
+
+@router.post("/signup/admin", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def signup(admin_data: UserCreate):
+    existing_user = await User.find_one({"$or": [{"username": admin_data.username}, {"email": admin_data.email}]})
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already registered",
+        )
+    hashed_password = get_password_hash(admin_data.password)
+    user = User(
+        username=admin_data.username,
+        email=admin_data.email,
+        hashed_password=hashed_password,
+        role='admin'
     
     )
     await user.insert()
     return user
+
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(refresh_token: str):
@@ -97,27 +118,41 @@ async def refresh_token(refresh_token: str):
     )
     return {
         "access_token": access_token,
-        "refresh_token": refresh_token,  # Optionally, issue a new refresh token
+        "refresh_token": refresh_token,  #issue a new refresh token
         "token_type": "bearer",
     }
 
 
 @router.get("/users", response_model=UserListResponse)
 async def get_all_users(current_user: User = Depends(get_current_user)):
-    users = await User.find_all().to_list()
-    return {"users": users}
-
+    # print(current_user.role)
+    if current_user.role == 'admin':
+        users = await User.find_all().to_list()
+        return {"users": users}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You Have Not Access To View all Users! -  Only admin Can do This",
+        ) 
 
 @router.get("/users/{user_id}",response_model=UserOut)
 async def get_user_by_id(user_id:PydanticObjectId,current_user:User=Depends(get_current_user)):
-    user=await User.find_one(User.id == user_id)
+    user=await User.find_one(User.id == user_id)   
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    return user
-
+    if current_user.role == 'user':
+        if current_user.id==user_id:
+            return user
+        else:
+            raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You Can View Only your Data",
+        )
+    else:
+        return user
 
       #Update User data by their id ,only authorized and same loged in user can update
 @router.put('/users/{user_id}', response_model=UserOut)
@@ -125,13 +160,13 @@ async def update_userdata_by_id(
     user_id: PydanticObjectId,
     update_data: UserUpdate,
     current_user: User = Depends(get_current_user)
-):
-    if user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update your own data",
-        )
-
+): 
+    if current_user.role == 'user':
+        if user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update your own data",
+            )
     user = await User.find_one(User.id == user_id)
     if not user:
         raise HTTPException(
@@ -143,9 +178,7 @@ async def update_userdata_by_id(
     update_dict = update_data.dict(exclude_unset=True)  # Exclude fields that are not provided
     if "password" in update_dict:
         update_dict["hashed_password"] = get_password_hash(update_dict.pop("password"))
-
     await user.update({"$set": update_dict})
-
     updated_user = await User.find_one(User.id == user_id)
     return updated_user
 
@@ -156,13 +189,19 @@ async def soft_delete_user_by_id(
     reason: Optional[str] = None,
     current_user: User = Depends(get_current_user)
 ):
-    if user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can Delete only Your Own data ",
-        )
+    if current_user.role=='user':
+        if user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can Delete only Your Own data ",
+            )
     # Find the user to be soft-deleted
     user = await User.find_one(User.id == user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
 
     user_delete_status_check = await User.find_one({"_id": user_id, "delete_status": True})
     user_check_in_trash= await Trash.find_one({"original_data.id": ObjectId(user_id)})
@@ -194,12 +233,16 @@ async def soft_delete_user_by_id(
 
 
 
-
 @router.delete('/batch-delete')
 async def batch_soft_delete_users(
     batch_delete_request: BatchDeleteRequest,
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.role=='user':
+        raise HTTPException(
+            status_code=403,
+            detail='Only Admin Can Delete Multiple Records'
+        )    
     valid_user_ids = []
     for uid_str in batch_delete_request.user_ids:
         try:
@@ -228,17 +271,9 @@ async def batch_soft_delete_users(
             already_deleted_user.append(str(user_id))
             print(already_deleted_user)
             continue
-            # raise HTTPException(
-            #     status_code=500,
-            #     detail="User Already Present in Trash",
-            # )
         elif not user_check_in_trash and user_delete_status_check:
             already_deleted_user.append(str(user_id))
             continue
-            # raise HTTPException(
-            #     status_code=400,
-            #     detail="User Already Permamently Deleted.."
-            # )   
         # Create trash record
         trash_record = Trash(
             original_data=user_data,
@@ -274,6 +309,11 @@ def convert_objectid_to_str(obj):
 @router.get('/view-trash', response_model=TrashList)
 async def view_trash(
     current_user: User = Depends(get_current_user),): 
+    if current_user.role=='user':
+        raise HTTPException(
+            status_code=403,
+            detail="You Have Not Access To View Trash Data"
+        )
     trash_records = await Trash.find().to_list()
 
     if not trash_records:
@@ -307,6 +347,11 @@ async def restore_user_data(
     restore_data: RestoreUser,
     current_user: User = Depends(get_current_user)
 ):
+    if current_user.role=='user':
+        raise HTTPException(
+            status_code=403,
+            detail="Only Admin can Restore the Trash Record"
+        )
     trash_record = await Trash.find_one({"original_data.id": ObjectId(restore_data.user_id)})
     if not trash_record:
         raise HTTPException(
@@ -342,6 +387,11 @@ async def permamently_delete_user_by_id(
     user_id:str,
     current_user:User=Depends(get_current_user)
 ):
+    if current_user.role=='user':
+        raise HTTPException(
+            status_code=403,
+            detail="You can't Perform This Operation"
+        )
     trash_record = await Trash.find_one({"original_data.id": ObjectId(user_id)})
     if not trash_record:
         raise HTTPException(
@@ -362,3 +412,4 @@ async def permamently_delete_user_by_id(
         "message":"User Permamently Deleted Successfully",
         'delete_user_id':response
     }    
+
