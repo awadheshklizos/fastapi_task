@@ -22,10 +22,11 @@ from bson import ObjectId
 
 router = APIRouter(tags=["auth"])
 
-
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = await authenticate_user(form_data.username, form_data.password)
+async def login(login_request: OAuth2PasswordRequestForm = Depends()):
+    # Using the login_request directly (no form_data here)
+    user = await authenticate_user(login_request.username, login_request.password)
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -42,13 +43,36 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     refresh_token = create_refresh_token(
         data={"sub": user.username}, expires_delta=refresh_token_expires
     )
-
-
-
     # user.refresh_tokens.append(refresh_token)
     await user.save()
 
     return {"access_token": access_token,"refresh_token":refresh_token,  "token_type": "bearer"}
+
+
+
+# @router.post("/login", response_model=Token)
+# async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+#     user = await authenticate_user(form_data.username, form_data.password)
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Incorrect username or password",
+#             headers={"WWW-Authenticate": "Bearer"},
+#         )
+
+#     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+#     access_token = create_access_token(
+#         data={"sub": user.username}, expires_delta=access_token_expires
+#     )
+
+#     refresh_token_expires = timedelta(days=7)  # Refresh token lasts 7 days
+#     refresh_token = create_refresh_token(
+#         data={"sub": user.username}, expires_delta=refresh_token_expires
+#     )
+#     # user.refresh_tokens.append(refresh_token)
+#     await user.save()
+
+#     return {"access_token": access_token,"refresh_token":refresh_token,  "token_type": "bearer"}
 
 
 
@@ -183,7 +207,7 @@ async def update_userdata_by_id(
     return updated_user
 
 
-@router.delete('/users/{user_id}', response_model=UserOut)
+@router.delete('/delete-users/{user_id}', response_model=UserOut)
 async def soft_delete_user_by_id(
     user_id: PydanticObjectId,
     reason: Optional[str] = None,
@@ -342,9 +366,10 @@ async def view_trash(
 
 
 
-@router.put('/restore-user')
+@router.put('/restore-user/{user_id}')
 async def restore_user_data(
-    restore_data: RestoreUser,
+    # restore_data: RestoreUser,
+    user_id: str,
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role=='user':
@@ -352,7 +377,9 @@ async def restore_user_data(
             status_code=403,
             detail="Only Admin can Restore the Trash Record"
         )
-    trash_record = await Trash.find_one({"original_data.id": ObjectId(restore_data.user_id)})
+    trash_record = await Trash.find_one({"original_data.id": ObjectId(user_id)})
+
+    # trash_record = await Trash.find_one({"original_data.id": ObjectId(restore_data.user_id)})
     if not trash_record:
         raise HTTPException(
             status_code=404,
@@ -392,6 +419,7 @@ async def permamently_delete_user_by_id(
             status_code=403,
             detail="You can't Perform This Operation"
         )
+
     trash_record = await Trash.find_one({"original_data.id": ObjectId(user_id)})
     if not trash_record:
         raise HTTPException(

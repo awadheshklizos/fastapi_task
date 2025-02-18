@@ -1,29 +1,29 @@
-# # tests/test_auth.py
-# def test_login(client):
-#     # Create user first
-#     client.post("/users/", json={
-#         "email": "login@test.com",
-#         "password": "secret"
-#     })
+import pytest
+
+
+def test_login_user(client):
+    signup_response=client.post(
+        "/auth/signup/admin",json={
+            "username":"testing",
+            "email":"testing@gmail.com",
+            "password":"testing"
+        }
+    )
+    user_id=signup_response.json()["id"]
+    assert signup_response.status_code == 201
+    response=client.post(
+        "/auth/login",data={
+            "username":"testing",
+            "password":"testing"
+        }
+    )
+
+    assert response.status_code==200
+    response_data = response.json()
     
-#     # Test valid login
-#     response = client.post("/login", data={
-#         "username": "login@test.com",
-#         "password": "secret"
-#     })
-#     assert response.status_code == 200
-#     assert "access_token" in response.json()
-
-# def test_invalid_login(client):
-#     # Test invalid credentials
-#     response = client.post("/login", data={
-#         "username": "nonexistent@test.com",
-#         "password": "wrong"
-#     })
-#     assert response.status_code == 401
-
-
-
+    assert "access_token" in response_data
+    assert "refresh_token" in response_data
+    access_token = response.json()["access_token"]
 
 
 
