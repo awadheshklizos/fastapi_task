@@ -22,7 +22,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-          
+
     steps:
     - name: Checkout Code
       uses: actions/checkout@v2  # Checkout the repository code
@@ -52,6 +52,3 @@ jobs:
       run: |
         source venv/bin/activate  # Activate the virtual environment
         python -m pytest  # Run tests located in the tests directory
-
-      # env:
-      #   MONGO_URL: mongodb://localhost:27017 
