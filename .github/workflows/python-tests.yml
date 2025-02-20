@@ -1,0 +1,43 @@
+name: Python Tests
+
+on:
+  push:
+    branches:
+      - main  # Trigger on push to the main branch
+  pull_request:
+    branches:
+      - main  # Trigger on pull request targeting the main branch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest  # Define the OS environment to run the workflow
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v2  # Checkout the repository code
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'  # Specify the Python version (adjust as needed)
+
+    - name: Set environment variabes
+      run: |
+          echo "MONGODB_URL=${{ secrets.MONGODB_URL }}" >> $GITHUB_ENV
+          echo "MONGODB_DB_NAME=${{ secrets.MONGODB_DB_NAME }}" >> $GITHUB_ENV
+          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> $GITHUB_ENV
+          echo "ALGORITHM=${{ secrets.ALGORITHM }}" >> $GITHUB_ENV
+          echo "ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}" >> $GITHUB_ENV
+
+
+    - name: Install Dependencies
+      run: |
+        python -m venv venv  # Create a virtual environment
+        source venv/bin/activate  # Activate the virtual environment
+        pip install --upgrade pip  # Upgrade pip to the latest version
+        pip install -r requirements.txt  # Install project dependencies
+
+    - name: Run Tests
+      run: |
+        source venv/bin/activate  # Activate the virtual environment
+        pytest tests/  # Run tests located in the tests directory
