@@ -1,21 +1,16 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from main import app
+from app.main import app
 from app.core.database import init_db
 from pymongo import MongoClient
-from app.core.config import settings  # Import your settings for the DB connection
+from app.core.config import settings 
 
 @pytest.fixture(scope="session")
 def prod_db():
-    # client=MongoClient("mongodb://localhost:27017/")
-    # db=client["fastapi_testing"]
-    # user_collection=db["users"]
-    # trash_collection=db["trash"]
+
     client = MongoClient(settings.MONGODB_URL)
     db = client[settings.MONGODB_DB_NAME]  
-
-    # db.users.create_index("email", unique=True)
     yield db  
     client.close()
 
