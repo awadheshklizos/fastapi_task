@@ -50,6 +50,10 @@ Follow these steps to set up the project locally:
 -  **For macOS/Linux:** source .venv/bin/activate
 -  **For Windows:** .venv\Scripts\activate    
 -  **For Windows:** - .\venv\Scripts\activate   (if first one is not worked for activate)
+
+**##Database-** 
+- Make Sure you have MongoDb Database in your System with Setup
+- 
 ## Install dependencies
 
 - **bash**
@@ -58,7 +62,10 @@ Follow these steps to set up the project locally:
 
 ## Run the application:
 type this Command in your termial ( Env should be Activated)
-- **uvicorn app.main:app --reload** 
+- **uvicorn app.main:app --reload**
+  
+- in Case not Run the port and not able to see any Result just change the port  -  **uvicorn app.main:app --port 8001**
+
 
 **Your application will be available at [http://127.0.0.1:8000].**
 
