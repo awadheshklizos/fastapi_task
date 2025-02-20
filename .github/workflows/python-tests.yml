@@ -42,5 +42,5 @@ jobs:
         source venv/bin/activate  # Activate the virtual environment
         python -m pytest  # Run tests located in the tests directory
 
-
-        MONGO_URL: mongodb://localhost:27017 
+      # env:
+      #   MONGO_URL: mongodb://localhost:27017 

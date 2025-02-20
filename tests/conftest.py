@@ -31,12 +31,12 @@ def client(prod_db):
     with TestClient(app) as test_client:
         yield test_client 
 
-@pytest.fixture(autouse=True)
-def cleanup_db(prod_db):
-    for collection_name in prod_db.list_collection_names():
-        prod_db[collection_name].delete_many({}) 
+# @pytest.fixture(scope='function',autouse=True)
+# def cleanup_db(prod_db):
+#     for collection_name in prod_db.list_collection_names():
+#         prod_db[collection_name].delete_many({}) 
 
-    yield 
-    for collection_name in prod_db.list_collection_names():
-        prod_db[collection_name].delete_many({})
+#     yield 
+#     for collection_name in prod_db.list_collection_names():
+#         prod_db[collection_name].delete_many({})
 
