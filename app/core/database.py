@@ -15,7 +15,6 @@ async def init_db():
     ) 
 
 
-
 async def close_db():
     """Close the MongoDB client connection."""
     if client:

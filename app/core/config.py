@@ -1,5 +1,5 @@
 from pydantic_settings  import BaseSettings
-# import secrets
+
 
 class Settings(BaseSettings):
     MONGODB_URL: str = "mongodb://localhost:27017/"
