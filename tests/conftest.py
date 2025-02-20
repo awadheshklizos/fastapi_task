@@ -1,10 +1,16 @@
 
+import sys
+import os
 import pytest
+
 from fastapi.testclient import TestClient
 from app.main import app
 from app.core.database import init_db
 from pymongo import MongoClient
 from app.core.config import settings 
+
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 @pytest.fixture(scope="session")
 def prod_db():
