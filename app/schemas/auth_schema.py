@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class Token(BaseModel):
     access_token: str
@@ -10,7 +11,8 @@ class RegenerateToken(BaseModel):
 
 
 class TokenData(BaseModel):
-    username: str | None = None
+    # username: str | None = None
+    username: Optional[str] = None
 
 class LoginForm(BaseModel):
     password: str
