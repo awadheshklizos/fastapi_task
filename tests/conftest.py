@@ -8,11 +8,12 @@ from app.main import app
 from app.core.database import init_db
 from pymongo import MongoClient
 from app.core.config import settings 
+import asyncio
 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='function')
 def prod_db():
 
     client = MongoClient(settings.MONGODB_URL)
@@ -20,7 +21,7 @@ def prod_db():
     yield db  
     client.close()
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='function')
 def client(prod_db):
     def override_init_db():
         yield prod_db
