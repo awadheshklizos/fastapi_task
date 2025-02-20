@@ -13,7 +13,7 @@ import asyncio
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope='session')
 def prod_db():
 
     client = MongoClient(settings.MONGODB_URL)
@@ -21,7 +21,7 @@ def prod_db():
     yield db  
     client.close()
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope='session')
 def client(prod_db):
     def override_init_db():
         yield prod_db
@@ -31,12 +31,12 @@ def client(prod_db):
     with TestClient(app) as test_client:
         yield test_client 
 
-# @pytest.fixture(scope='function',autouse=True)
-# def cleanup_db(prod_db):
-#     for collection_name in prod_db.list_collection_names():
-#         prod_db[collection_name].delete_many({}) 
+@pytest.fixture(autouse=True)
+def cleanup_db(prod_db):
+    for collection_name in prod_db.list_collection_names():
+        prod_db[collection_name].delete_many({}) 
 
-#     yield 
-#     for collection_name in prod_db.list_collection_names():
-#         prod_db[collection_name].delete_many({})
+    yield 
+    for collection_name in prod_db.list_collection_names():
+        prod_db[collection_name].delete_many({})
 
