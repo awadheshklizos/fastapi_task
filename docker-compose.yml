@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  fastapi:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URL=${MONGODB_URL_DOCKER}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - SECRET_KEY= ${SECRET_KEY}  
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES{ACCESS_TOKEN_EXPIRE_MINUTES}
+
+    depends_on:
+      - mongo
+    networks:
+      - fastapi-mongo-network  
+
+    working_dir: /app
+
+    volumes:
+      - .:/app
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - fastapi-mongo-network
+
+volumes:
+  mongo-data:
+
+networks:
+  fastapi-mongo-network:
+    driver: bridge

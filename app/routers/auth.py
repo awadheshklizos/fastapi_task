@@ -187,7 +187,6 @@ async def get_user_by_id(
 
     # Update User data by their id ,only authorized and same loged in user can update
 
-
 @router.put("/users/{user_id}", response_model=UserOut)
 async def update_userdata_by_id(
     user_id: PydanticObjectId,
